@@ -1,4 +1,5 @@
 import pandas as pd
+import random as rnd
 import src.Ship as S
 def char2index(char):
     return ord(char)-65
@@ -6,10 +7,12 @@ def index2char(index):
     return chr(index+65)
 
 class Board:
-    def __init__(self, name):
+    def __init__(self, name, mode = 0):
         self.name = name
+        self.playerMode = mode
         self.board = self.createEmptyBoards()
         self.ships = self.setShips()
+        self.availableShotFields = [i+str(c) for i in self.board.index for c in self.board.columns[:10]]
 
 
     def createEmptyBoards(self):
@@ -39,13 +42,15 @@ class Board:
         shipLengths_tmp = [str(i)*j for i, j in zip(list(reversed(lengths)), lengths)]
         shipLengths = [int(i) for ship in shipLengths_tmp for i in ship]
 
+
         for sLen in shipLengths:
-            self.showBoards()
-            print('Setting '+str(sLen)+'-masted: ')
-            direction = self.chooseDirection(sLen)
-            chosenField = self.chooseStartField(sLen,direction,self.getAvailableFieldsOnShipsBoard())
-            edges = self.addEdges4Ship( char2index(chosenField[0]), int(chosenField[1]), sLen,
-                                   direction, self.getAvailableFieldsOnShipsBoard())
+            if self.playerMode:
+                self.showBoards()
+                print('Setting '+str(sLen)+'-masted: ')
+            direction = self.chooseDirection(sLen,self.playerMode)
+            chosenField = self.chooseStartField(sLen,direction,self.getAvailableFieldsOnShipsBoard(),self.playerMode)
+            edges = self.addEdges4Ship(char2index(chosenField[0]), int(chosenField[1]), sLen,
+                                       direction, self.getAvailableFieldsOnShipsBoard())
             s = S.Ship(chosenField,sLen,direction,edges)
             self.board = self.addShipOnBoard(s)
             allShips.append(s)
@@ -73,7 +78,7 @@ class Board:
         return [f for f in allFields if board.iloc[char2index(f[0]), int(f[1])] == '-']
 
     def showBoards(self):
-        print('\n\n',self.name+' move:\n','\t'*3,'YOUR BOARD','\t'*6,'   OPPONENT BOARD\n',self.board,sep='')
+        print('\n\n',self.name+':\n','\t'*3,'YOUR BOARD','\t'*6,'   OPPONENT BOARD\n',self.board,sep='')
 
     def addShipOnBoard(self,ship):
         st, l, d, e = ship.start, ship.length, ship.direction, ship.edges
@@ -90,34 +95,71 @@ class Board:
 
         return self.board
 
-    def chooseDirection(self,sLen):
-        d = '1' if sLen == 1 else input('Ship orientation (0-vertical | 1-horizontal): ')
-        while d != str(0) and d != str(1):
-            d = input('Incorrect orientation. Choose again (0-vertical | 1-horizontal): ')
+    def chooseDirection(self, sLen , playerMode):
+        if playerMode:
+            d = '1' if sLen == 1 else input('Ship orientation (0-vertical | 1-horizontal): ')
+            while d != str(0) and d != str(1):
+                d = input('Incorrect orientation. Choose again (0-vertical | 1-horizontal): ')
+            else:
+                return int(d)
         else:
-            return int(d)
+            return rnd.randint(0,1)
 
-    def chooseStartField(self,sLen,direction,availFields):
+    def chooseStartField(self,sLen,direction,availFields,playerMode):
         correctAnswer = False
         while not correctAnswer:
-            start = str(input('Start field: '))[:2].upper()
-            try:
-                tmp = int(start[1])
-            except:
-                print('Incorrect input')
+            if playerMode:
+                start = self.setInputField('Start field: ')
             else:
-                if direction:
-                    shipFields = [start[0]+str((int(start[1])+i)) for i in range(sLen)]
-                else:
-                    shipFields = [str(index2char(char2index(start[0])+i))+start[1] for i in range(sLen)]
-                lenCorrFields = len([sField for sField in shipFields if sField in availFields])
-                correctAnswer = True if len(shipFields) == lenCorrFields else False
-                if not correctAnswer:
-                    print('Incorrect setting. Choose again!')
+                start = self.generateField()
+            if direction:
+                shipFields = [start[0]+str((int(start[1])+i)) for i in range(sLen)]
+            else:
+                shipFields = [str(index2char(char2index(start[0])+i))+start[1] for i in range(sLen)]
+            lenCorrFields = len([sField for sField in shipFields if sField in availFields])
+            correctAnswer = True if len(shipFields) == lenCorrFields else False
+            if (not correctAnswer) and playerMode:
+                print('Incorrect setting. Choose again!')
         else:
             return start
 
-    def cleanUpShipBoard(self):
-        self.board = self.board.iloc[:, :10].replace({'X':'-'})
 
+    def setInputField(self, text):
+        while True:
+            start = str(input(text)).upper()
+            ind = char2index(start[0])
+            if len(start) == 2 and ind >= 0 and ind <= 9:
+                try:
+                    tmpCol = int(start[1])
+                except:
+                    print('Incorrect input')
+                else:
+                    return start
+            else:
+                print('Incorrect input length or field')
+
+    def generateField(self,availableFields = []):
+        if len(availableFields):
+            return rnd.choice(availableFields)
+        else:
+            ind = rnd.choice(list(map(chr,range(65,75))))
+            col = rnd.choice(range(10))
+            return ind+str(col)
+
+    def cleanUpShipBoard(self):
+        self.board.iloc[:,:10] = self.board.iloc[:, :10].replace({'X':'-'})
+
+    def addShotOnShotBoard(self, shot, opponentBoard):
+        ind = char2index(shot[0]) #ind
+        col = int(shot[1]) #col ship board
+        col2 = int(shot[1])+12 #col shot board
+
+        if opponentBoard.iloc[ind, col] == 'O':
+            opponentBoard.iloc[ind, col] = '!'
+            self.board.iloc[ind, col2] = '!'
+        else:
+            opponentBoard.iloc[ind, col] = 'X'
+            self.board.iloc[ind, col2] = 'X'
+        self.showBoards()
+        print('Shot: ',shot)
 
