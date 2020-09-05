@@ -3,8 +3,16 @@ import random as rnd
 import src.Ship as S
 def char2index(char):
     return ord(char)-65
+
 def index2char(index):
     return chr(index+65)
+
+def col2opp(strCol):
+    return int(strCol)+12
+
+def opp2col(intCol):
+    print('test: ',intCol)
+    return str(intCol-12)
 
 class Board:
     def __init__(self, name, mode = 0):
@@ -13,7 +21,7 @@ class Board:
         self.board = self.createEmptyBoards()
         self.ships = self.setShips()
         self.availableShotFields = [i+str(c) for i in self.board.index for c in self.board.columns[:10]]
-
+        self.destroyed = []
 
     def createEmptyBoards(self):
         x = list(range(10))
@@ -41,7 +49,6 @@ class Board:
         lengths = list(range(1,5))
         shipLengths_tmp = [str(i)*j for i, j in zip(list(reversed(lengths)), lengths)]
         shipLengths = [int(i) for ship in shipLengths_tmp for i in ship]
-
 
         for sLen in shipLengths:
             if self.playerMode:
@@ -78,7 +85,7 @@ class Board:
         return [f for f in allFields if board.iloc[char2index(f[0]), int(f[1])] == '-']
 
     def showBoards(self):
-        print('\n\n',self.name+':\n','\t'*3,'YOUR BOARD','\t'*6,'   OPPONENT BOARD\n',self.board,sep='')
+        print(self.name+':\n','\t'*3,'YOUR BOARD','\t'*6,'   OPPONENT BOARD\n',self.board,sep='')
 
     def addShipOnBoard(self,ship):
         st, l, d, e = ship.start, ship.length, ship.direction, ship.edges
@@ -91,7 +98,6 @@ class Board:
             self.board.iloc[id,col:col+l] = 'O'
         else:
             self.board.iloc[id:id+l,col] = 'O'
-
 
         return self.board
 
@@ -111,7 +117,7 @@ class Board:
             if playerMode:
                 start = self.setInputField('Start field: ')
             else:
-                start = self.generateField()
+                start= self.generateField()
             if direction:
                 shipFields = [start[0]+str((int(start[1])+i)) for i in range(sLen)]
             else:
@@ -134,17 +140,59 @@ class Board:
                 except:
                     print('Incorrect input')
                 else:
-                    return start
+                    return start, S.Ship('X0',1,1,[]) #nie zaznacza sam ??
             else:
                 print('Incorrect input length or field')
 
     def generateField(self,availableFields = []):
         if len(availableFields):
-            return rnd.choice(availableFields)
-        else:
+            if len(self.destroyed) > 0:
+                neighbours, destroyedShip = self.getNeighbours(self.destroyed,availableFields)
+                if len(neighbours) != 0:
+                    availableFields = neighbours
+                return rnd.choice(availableFields), destroyedShip
+        else: # for random ships setting
             ind = rnd.choice(list(map(chr,range(65,75))))
             col = rnd.choice(range(10))
             return ind+str(col)
+
+    def getNeighbours(self,fields,availFields):
+        if len(fields) == 1:
+            ind = char2index(fields[0][0])
+            col = fields[0][1]
+            up = index2char(ind-1)+fields[0][1]
+            down = index2char(ind+1)+fields[0][1]
+            left = fields[0][0]+str(int(col)-1)
+            right = fields[0][0]+str(int(col)+1)
+            neighbours = [up,down,left,right]
+            start = fields[0]
+            direction = 1
+        else: #>= 2
+            if fields[0][0] == fields[1][0]:  #poziom
+                cols = [int(fields[i][1]) for i in range(len(fields))]
+                left = fields[0][0]+str(min(cols)-1)
+                right = fields[0][0]+str(max(cols)+1)
+                neighbours = [left,right]
+                start = fields[0][0]+str(min(cols))
+                direction = 1
+            else: #pion
+                inds = [char2index(fields[i][0]) for i in range(len(fields))]
+                up =  index2char(min(inds)-1)+fields[0][1]
+                down = index2char(max(inds)+1)+fields[0][1]
+                neighbours = [up,down]
+                start = index2char(min(inds))+fields[0][1]
+                direction = 0
+
+        correctNeighbours = [i for i in neighbours if i in availFields]
+        if len(correctNeighbours) == 0:
+            edges = self.addEdges4Ship(char2index(start[0]), int(start[1]), len(fields),
+                                       direction, self.getAvailableFieldsOnShipsBoard())
+            destroyedShip = S.Ship(start,len(fields),direction,edges)
+        else:
+            destroyedShip = S.Ship('X0',1,1,[])
+
+            return [], destroyedShip
+        return correctNeighbours, destroyedShip
 
     def cleanUpShipBoard(self):
         self.board.iloc[:,:10] = self.board.iloc[:, :10].replace({'X':'-'})
@@ -152,11 +200,12 @@ class Board:
     def addShotOnShotBoard(self, shot, opponentBoard):
         ind = char2index(shot[0]) #ind
         col = int(shot[1]) #col ship board
-        col2 = int(shot[1])+12 #col shot board
+        col2 = col2opp(shot[1]) #col shot board
 
         if opponentBoard.iloc[ind, col] == 'O':
             opponentBoard.iloc[ind, col] = '!'
             self.board.iloc[ind, col2] = '!'
+            self.destroyed.append(shot)
         else:
             opponentBoard.iloc[ind, col] = 'X'
             self.board.iloc[ind, col2] = 'X'

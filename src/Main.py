@@ -8,8 +8,11 @@ print('\n'*5,'################################ GAME ############################
 endGame = False
 count = 0
 while not endGame:
-    print('Round: ',count)
-    g.nextTurn()
+    print('\n\nRound: ',count)
+    winner = g.goRound()
+    if winner != None:
+        print('Game over. Winner is : ',winner.name,'!!')
+        endGame = True
     count += 1
     if count == 200:
         endGame = True
