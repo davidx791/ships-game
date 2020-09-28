@@ -11,7 +11,6 @@ def col2opp(strCol):
     return int(strCol)+12
 
 def opp2col(intCol):
-    print('test: ',intCol)
     return str(intCol-12)
 
 class Board:
@@ -21,7 +20,7 @@ class Board:
         self.board = self.createEmptyBoards()
         self.ships = self.setShips()
         self.availableShotFields = [i+str(c) for i in self.board.index for c in self.board.columns[:10]]
-        self.destroyed = []
+        self.lastGoodShots = []
 
     def createEmptyBoards(self):
         x = list(range(10))
@@ -76,11 +75,15 @@ class Board:
             cols = list(range(col-1,col+2))
         potentFields = [str(i)+str(c) for i in ids for c in cols]
         availFields = [str(char2index(i[0]))+i[1] for i in availFields]#zmiana chara na index
-        edges = [i for i in potentFields if i in availFields]
-        return edges
+        return [i for i in potentFields if i in availFields] #edges
 
     def getAvailableFieldsOnShipsBoard(self):
         board = self.board.iloc[:, :10]
+        allFields = [i+str(c) for i in list(board.index) for c in list(board.columns)]
+        return [f for f in allFields if board.iloc[char2index(f[0]), int(f[1])] == '-']
+
+    def getAvailableFieldsOnShotsBoard(self):
+        board = self.board.iloc[:,12:]
         allFields = [i+str(c) for i in list(board.index) for c in list(board.columns)]
         return [f for f in allFields if board.iloc[char2index(f[0]), int(f[1])] == '-']
 
@@ -115,9 +118,10 @@ class Board:
         correctAnswer = False
         while not correctAnswer:
             if playerMode:
-                start = self.setInputField('Start field: ')
+                print('Start field: ')
+                start = self.setInputField()
             else:
-                start= self.generateField()
+                start = self.generateStartField()
             if direction:
                 shipFields = [start[0]+str((int(start[1])+i)) for i in range(sLen)]
             else:
@@ -130,33 +134,48 @@ class Board:
             return start
 
 
-    def setInputField(self, text):
+    def setInputField(self):
         while True:
-            start = str(input(text)).upper()
-            ind = char2index(start[0])
-            if len(start) == 2 and ind >= 0 and ind <= 9:
+            text = str(input()).upper()
+            ind = char2index(text[0])
+            if len(text) == 2 and ind >= 0 and ind <= 9:
                 try:
-                    tmpCol = int(start[1])
+                    tmpCol = int(text[1])
                 except:
                     print('Incorrect input')
                 else:
-                    return start, S.Ship('X0',1,1,[]) #nie zaznacza sam ??
+                    return text
             else:
                 print('Incorrect input length or field')
 
-    def generateField(self,availableFields = []):
-        if len(availableFields):
-            if len(self.destroyed) > 0:
-                neighbours, destroyedShip = self.getNeighbours(self.destroyed,availableFields)
-                if len(neighbours) != 0:
-                    availableFields = neighbours
-                return rnd.choice(availableFields), destroyedShip
-        else: # for random ships setting
-            ind = rnd.choice(list(map(chr,range(65,75))))
-            col = rnd.choice(range(10))
-            return ind+str(col)
+    def generateStartField(self):
+        ind = rnd.choice(list(map(chr,range(65,75))))
+        col = rnd.choice(range(10))
+        return ind+str(col)
 
-    def getNeighbours(self,fields,availFields):
+    def getStartField(self,fields,direction):
+        start = fields[0]
+        for i in fields[1:]:
+            if direction == 1: #poziom
+                if start[1] > i[1]:
+                    start = i
+            else: #pion
+                if char2index(start[0]) > char2index(i[0]):
+                    start = i
+        return start
+
+    def generateField(self,player):
+        if not len(player.lastGoodShots): # jeśli nie pamieta dobrego strzalu
+            return rnd.choice(player.availableShotFields) #zwraca losowe pole
+        else: #jesli pamieta
+            result = self.getNeighboursAndDestroyedShip(player.lastGoodShots,player.availableShotFields)
+            if type(result) == list:
+                return rnd.choice(result) #zwraca sasiadow poprzednich strzalow
+            else:
+                player.lastGoodShots = []
+                return result #zwraca statek
+
+    def getNeighboursAndDestroyedShip(self,fields,availFields):
         if len(fields) == 1:
             ind = char2index(fields[0][0])
             col = fields[0][1]
@@ -185,14 +204,12 @@ class Board:
 
         correctNeighbours = [i for i in neighbours if i in availFields]
         if len(correctNeighbours) == 0:
+            start = self.getStartField(fields,direction)
             edges = self.addEdges4Ship(char2index(start[0]), int(start[1]), len(fields),
-                                       direction, self.getAvailableFieldsOnShipsBoard())
-            destroyedShip = S.Ship(start,len(fields),direction,edges)
-        else:
-            destroyedShip = S.Ship('X0',1,1,[])
+                                       direction, self.getAvailableFieldsOnShotsBoard())
+            return S.Ship(start,len(fields),direction,edges)
 
-            return [], destroyedShip
-        return correctNeighbours, destroyedShip
+        return correctNeighbours
 
     def cleanUpShipBoard(self):
         self.board.iloc[:,:10] = self.board.iloc[:, :10].replace({'X':'-'})
@@ -205,10 +222,9 @@ class Board:
         if opponentBoard.iloc[ind, col] == 'O':
             opponentBoard.iloc[ind, col] = '!'
             self.board.iloc[ind, col2] = '!'
-            self.destroyed.append(shot)
+            self.lastGoodShots.append(shot)
         else:
             opponentBoard.iloc[ind, col] = 'X'
             self.board.iloc[ind, col2] = 'X'
         self.showBoards()
         print('Shot: ',shot)
-
