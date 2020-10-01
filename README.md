@@ -1,1 +1,1 @@
-Console game 'Ships' written in Python 3.7
+Game 'Ships' written in Python 3.7
